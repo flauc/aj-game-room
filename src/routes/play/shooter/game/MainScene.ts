@@ -55,6 +55,7 @@ export interface SceneConfig {
   playerName: string;
   players: Record<string, { name: string }>;
   isHost: boolean;
+  singlePlayer: boolean;
   onEliminated: (killerName: string) => void;
   onGameOver: (winnerId: string | null, winnerName: string | null) => void;
   onStatsUpdate: (kills: number, wave: number, alivePlayers: number, timeOfDay: string) => void;
@@ -63,7 +64,7 @@ export interface SceneConfig {
 
 export class MainScene extends Phaser.Scene {
   private config!: SceneConfig;
-  private sync!: MultiplayerSync;
+  private sync: MultiplayerSync | null = null;
   private input2!: InputManager;
   private fogOfWar!: FogOfWar;
   private monsterManager!: MonsterManager;
@@ -122,8 +123,10 @@ export class MainScene extends Phaser.Scene {
     // Init input
     this.input2 = new InputManager(this);
 
-    // Init multiplayer sync
-    this.sync = new MultiplayerSync(this.config.roomId, this.config.playerId, this.config.isHost);
+    // Init multiplayer sync (skip in single player)
+    if (!this.config.singlePlayer) {
+      this.sync = new MultiplayerSync(this.config.roomId, this.config.playerId, this.config.isHost);
+    }
 
     // Init monster manager
     this.monsterManager = new MonsterManager(this, this.sync, this.config.isHost, this.wallGroup);
@@ -145,39 +148,39 @@ export class MainScene extends Phaser.Scene {
     this.createLocalPlayer(spawnPos.x, spawnPos.y);
 
     // Join game in RTDB
-    this.sync.joinGame(this.config.playerName);
+    this.sync?.joinGame(this.config.playerName);
 
     // Camera follow
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
     this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
 
     // Listen for remote players
-    this.sync.onRemotePlayers(
+    this.sync?.onRemotePlayers(
       (id, state) => this.addRemotePlayer(id, state),
       (id, state) => this.updateRemotePlayer(id, state),
       (id) => this.removeRemotePlayer(id)
     );
 
     // Listen for remote bullets
-    this.sync.onBullets(
+    this.sync?.onBullets(
       (id, bullet) => this.addRemoteBullet(id, bullet),
       (id) => this.removeRemoteBullet(id)
     );
 
     // Listen for eliminations
-    this.sync.onEliminations((event) => {
+    this.sync?.onEliminations((event) => {
       const killerName = this.playerNames.get(event.killer) || 'Monster';
       const victimName = this.playerNames.get(event.victim) || 'Unknown';
       this.config.onKillFeed(killerName, victimName);
     });
 
     // Listen for wave changes
-    this.sync.onWave((wave) => {
+    this.sync?.onWave((wave) => {
       this.monsterManager.setWave(wave);
     });
 
     // Listen for game over
-    this.sync.onGameOver((winnerId) => {
+    this.sync?.onGameOver((winnerId) => {
       const winnerName = winnerId ? this.playerNames.get(winnerId) || null : null;
       this.config.onGameOver(winnerId, winnerName);
     });
@@ -411,7 +414,7 @@ export class MainScene extends Phaser.Scene {
             this.monsterManager.damageMonster(mId, BULLET_DAMAGE);
           }
           bullet.sprite.destroy();
-          if (bullet.rtdbId) this.sync.removeBullet(bullet.rtdbId);
+          if (bullet.rtdbId) this.sync?.removeBullet(bullet.rtdbId);
           this.localBullets.splice(i, 1);
           break;
         }
@@ -449,7 +452,7 @@ export class MainScene extends Phaser.Scene {
     }
 
     // -- Sync local player state --
-    this.sync.syncLocalPlayer({
+    this.sync?.syncLocalPlayer({
       x: this.player.x,
       y: this.player.y,
       a: input.aimAngle,
@@ -516,20 +519,22 @@ export class MainScene extends Phaser.Scene {
     // Collide with walls
     this.physics.add.collider(sprite, this.wallGroup, () => {
       sprite.destroy();
-      if (bullet.rtdbId) this.sync.removeBullet(bullet.rtdbId);
+      if (bullet.rtdbId) this.sync?.removeBullet(bullet.rtdbId);
       const idx = this.localBullets.indexOf(bullet);
       if (idx !== -1) this.localBullets.splice(idx, 1);
     });
 
     // Sync to RTDB
-    bullet.rtdbId = this.sync.fireBullet({
-      x: startX,
-      y: startY,
-      vx,
-      vy,
-      o: this.config.playerId,
-      src: 'player'
-    });
+    if (this.sync) {
+      bullet.rtdbId = this.sync.fireBullet({
+        x: startX,
+        y: startY,
+        vx,
+        vy,
+        o: this.config.playerId,
+        src: 'player'
+      });
+    }
     this.localBullets.push(bullet);
   }
 
@@ -570,7 +575,7 @@ export class MainScene extends Phaser.Scene {
 
       if (bullet.lifetime <= 0 || !bullet.sprite.active) {
         bullet.sprite.destroy();
-        if (bullet.rtdbId) this.sync.removeBullet(bullet.rtdbId);
+        if (bullet.rtdbId) this.sync?.removeBullet(bullet.rtdbId);
         this.localBullets.splice(i, 1);
         continue;
       }
@@ -583,7 +588,7 @@ export class MainScene extends Phaser.Scene {
           if (dist < PLAYER_RADIUS + BULLET_RADIUS) {
             // We hit them — but damage is applied on their client
             bullet.sprite.destroy();
-            if (bullet.rtdbId) this.sync.removeBullet(bullet.rtdbId);
+            if (bullet.rtdbId) this.sync?.removeBullet(bullet.rtdbId);
             this.localBullets.splice(i, 1);
             break;
           }
@@ -710,7 +715,7 @@ export class MainScene extends Phaser.Scene {
     this.playerHpBarBg.setVisible(false);
     this.playerHpBar.setVisible(false);
 
-    this.sync.reportElimination(this.config.playerId, killerId);
+    this.sync?.reportElimination(this.config.playerId, killerId);
 
     if (killerId !== 'monster') {
       const rp = this.remotePlayers.get(killerId);
@@ -722,8 +727,7 @@ export class MainScene extends Phaser.Scene {
     } else {
       this.config.onEliminated('a monster');
     }
-    dayNight?.destroy();
-    this.this.sync.syncLocalPlayer({
+    this.sync?.syncLocalPlayer({
       x: this.player.x,
       y: this.player.y,
       a: 0,
@@ -732,9 +736,17 @@ export class MainScene extends Phaser.Scene {
       kills: this.kills,
       name: this.config.playerName
     });
+
+    // In single player, dying = game over
+    if (this.config.singlePlayer) {
+      this.config.onGameOver(null, null);
+    }
   }
 
   private checkWinCondition(): void {
+    // In single player, game over is handled in die()
+    if (this.config.singlePlayer) return;
+
     const allPlayers = new Map<string, boolean>();
     allPlayers.set(this.config.playerId, this.alive);
     for (const [id, rp] of this.remotePlayers) {
@@ -745,7 +757,7 @@ export class MainScene extends Phaser.Scene {
 
     if (alivePlayers.length <= 1 && allPlayers.size > 1) {
       const winnerId = alivePlayers.length === 1 ? alivePlayers[0][0] : null;
-      this.sync.reportGameOver(winnerId);
+      this.sync?.reportGameOver(winnerId);
     }
   }
 

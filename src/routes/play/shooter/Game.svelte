@@ -7,10 +7,11 @@
     playerName: string;
     players: Record<string, { name: string }>;
     isHost: boolean;
+    singlePlayer: boolean;
     onGameOver: (winnerId: string | null, winnerName: string | null) => void;
   }
 
-  let { roomId, playerId, playerName, players, isHost, onGameOver }: Props = $props();
+  let { roomId, playerId, playerName, players, isHost, singlePlayer, onGameOver }: Props = $props();
 
   let container: HTMLDivElement;
   let game: Phaser.Game | null = null;
@@ -61,6 +62,7 @@
       playerName,
       players,
       isHost,
+      singlePlayer,
       onEliminated: (killer: string) => {
         eliminated = true;
         killerName = killer;

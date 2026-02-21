@@ -33,7 +33,7 @@ interface SpawnHole {
  */
 export class MonsterManager {
   private scene: Phaser.Scene;
-  private sync: MultiplayerSync;
+  private sync: MultiplayerSync | null;
   private isHost: boolean;
   private monsters = new Map<string, Monster>();
   private spawnHoles: SpawnHole[] = [];
@@ -48,7 +48,7 @@ export class MonsterManager {
 
   constructor(
     scene: Phaser.Scene,
-    sync: MultiplayerSync,
+    sync: MultiplayerSync | null,
     isHost: boolean,
     wallGroup: Phaser.Physics.Arcade.StaticGroup
   ) {
@@ -57,7 +57,7 @@ export class MonsterManager {
     this.isHost = isHost;
     this.wallGroup = wallGroup;
 
-    if (!isHost) {
+    if (!isHost && this.sync) {
       // Listen for monster updates from host
       this.sync.onMonsters((data) => {
         this.updateFromSync(data);
@@ -79,7 +79,7 @@ export class MonsterManager {
   startNextWave(): void {
     if (!this.isHost) return;
     this.wave++;
-    this.sync.setWave(this.wave);
+    this.sync?.setWave(this.wave);
     this.waveActive = true;
 
     const count = 3 + this.wave * 2;
@@ -256,7 +256,7 @@ export class MonsterManager {
     }
 
     // Sync monster positions to RTDB
-    this.sync.syncMonsters(syncData);
+    this.sync?.syncMonsters(syncData);
 
     // Check if wave is complete
     if (this.waveActive && this.monsters.size === 0 && this.spawnHoles.length === 0) {

@@ -12,6 +12,7 @@
         playerName: string;
         players: Record<string, { name: string }>;
         isHost: boolean;
+        singlePlayer: boolean;
       }
     | {
         type: 'results';
@@ -32,9 +33,11 @@
     playerName: string;
     players: Record<string, { name: string }>;
     isHost: boolean;
+    singlePlayer?: boolean;
   }) {
     phase = {
       type: 'game',
+      singlePlayer: data.singlePlayer ?? false,
       ...data
     };
   }
@@ -67,6 +70,7 @@
     playerName={phase.playerName}
     players={phase.players}
     isHost={phase.isHost}
+    singlePlayer={phase.singlePlayer}
     onGameOver={handleGameOver}
   />
 {:else if phase.type === 'results'}

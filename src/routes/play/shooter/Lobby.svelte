@@ -16,6 +16,7 @@
       players: Record<string, { name: string }>;
       isHost: boolean;
       playerName: string;
+      singlePlayer?: boolean;
     }) => void;
   }
 
@@ -33,6 +34,18 @@
   let phase = $state<'choice' | 'lobby'>('choice');
 
   let unsubRoom: (() => void) | null = null;
+
+  function handleSolo() {
+    const soloId = crypto.randomUUID();
+    onStart({
+      roomId: '',
+      playerId: soloId,
+      players: { [soloId]: { name: playerName } },
+      isHost: true,
+      playerName,
+      singlePlayer: true
+    });
+  }
 
   async function handleCreate() {
     try {
@@ -103,6 +116,17 @@
         <p class="text-center text-gray-400">
           Playing as <span class="font-semibold text-white">{playerName}</span>
         </p>
+        <button
+          onclick={handleSolo}
+          class="w-full rounded-lg bg-amber-600 px-4 py-4 text-lg font-semibold text-white transition hover:bg-amber-500"
+        >
+          Play Solo
+        </button>
+        <div class="flex items-center gap-3">
+          <div class="h-px flex-1 bg-gray-700"></div>
+          <span class="text-sm text-gray-500">or play with friends</span>
+          <div class="h-px flex-1 bg-gray-700"></div>
+        </div>
         <button
           onclick={handleCreate}
           class="w-full rounded-lg bg-indigo-600 px-4 py-4 text-lg font-semibold text-white transition hover:bg-indigo-500"
