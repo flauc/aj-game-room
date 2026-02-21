@@ -12,21 +12,24 @@ import { FogOfWar } from './FogOfWar';
 import { InputManager } from './InputManager';
 import { MonsterManager } from './MonsterManager';
 import { MultiplayerSync, type PlayerState, type BulletData } from './MultiplayerSync';
-import { generateAllTextures, TEX, PLAYER_COLORS } from './SpriteGen';
+import { generateAllTextures, TEX, PLAYER_COLORS, type WeaponType } from './SpriteGen';
 import { DayNightCycle, type TimeOfDay } from './DayNightCycle';
 
 const PLAYER_RADIUS = 14;
 const PLAYER_SPEED = 200;
-const BULLET_SPEED = 400;
 const BULLET_RADIUS = 4;
-const BULLET_COOLDOWN = 250;
-const BULLET_DAMAGE = 25;
 const MAX_HP = 100;
 const INVULN_TIME = 1500;
 
+const WEAPON_CONFIGS = {
+  sword: { damage: 40, cooldown: 400, range: 45, speed: 0, type: 'melee' as const },
+  spear: { damage: 30, cooldown: 500, range: 70, speed: 0, type: 'melee' as const },
+  bow: { damage: 25, cooldown: 350, range: 0, range: 0, range: 0, speed: 380, type: 'ranged' as const }
+};
+
 interface RemotePlayer {
   sprite: Phaser.GameObjects.Image;
-  gun: Phaser.GameObjects.Image;
+  weapon: Phaser.GameObjects.Image;
   hpBarBg: Phaser.GameObjects.Rectangle;
   hpBar: Phaser.GameObjects.Rectangle;
   nameText: Phaser.GameObjects.Text;
@@ -56,6 +59,7 @@ export interface SceneConfig {
   players: Record<string, { name: string }>;
   isHost: boolean;
   singlePlayer: boolean;
+  weapon: WeaponType;
   onEliminated: (killerName: string) => void;
   onGameOver: (winnerId: string | null, winnerName: string | null) => void;
   onStatsUpdate: (kills: number, wave: number, alivePlayers: number, timeOfDay: string) => void;
@@ -72,13 +76,13 @@ export class MainScene extends Phaser.Scene {
 
   // Local player
   private player!: Phaser.GameObjects.Image;
-  private playerGun!: Phaser.GameObjects.Image;
+  private playerWeapon!: Phaser.GameObjects.Image;
   private playerHpBarBg!: Phaser.GameObjects.Rectangle;
   private playerHpBar!: Phaser.GameObjects.Rectangle;
   private hp = MAX_HP;
   private alive = true;
   private kills = 0;
-  private lastShotTime = 0;
+  private lastAttackTime = 0;
   private invulnUntil = 0;
   private playerColorIndex = 0;
   private lastStatsTime = 0;
@@ -119,7 +123,7 @@ export class MainScene extends Phaser.Scene {
     this.dayNight = new DayNightCycle(this);
 
     // Init fog of war
-    this.fogOfWar = new FogOfWar(this, 280, 120);
+    this.fogOfWar = new FogOfWar(this, 400, 140);
 
     // Init input
     this.input2 = new InputManager(this);
@@ -232,9 +236,10 @@ export class MainScene extends Phaser.Scene {
     body.setCollideWorldBounds(true);
     this.player.setDepth(20);
 
-    // Gun sprite
-    this.playerGun = this.add.image(x + 20, y, TEX.PLAYER_GUN + this.playerColorIndex);
-    this.playerGun.setDepth(21);
+    // Weapon sprite
+    const weaponTex = this.getWeaponTexture(this.config.weapon);
+    this.playerWeapon = this.add.image(x + 20, y, weaponTex);
+    this.playerWeapon.setDepth(21);
 
     // HP bar
     this.playerHpBarBg = this.add
@@ -262,7 +267,7 @@ export class MainScene extends Phaser.Scene {
       sprite.height / 2 - PLAYER_RADIUS
     );
 
-    const gun = this.add.image(state.x + 20, state.y, TEX.PLAYER_GUN + idx).setDepth(21);
+    const weapon = this.add.image(state.x + 20, state.y, TEX.WEAPON_SWORD).setDepth(21);
 
     const hpBarBg = this.add
       .rectangle(state.x, state.y - PLAYER_RADIUS - 10, 32, 5, 0x333333)
@@ -282,7 +287,7 @@ export class MainScene extends Phaser.Scene {
 
     this.remotePlayers.set(id, {
       sprite,
-      gun,
+      weapon: weapon,
       hpBarBg,
       hpBar,
       nameText,
@@ -310,16 +315,26 @@ export class MainScene extends Phaser.Scene {
     const rp = this.remotePlayers.get(id);
     if (!rp) return;
     rp.sprite.destroy();
-    rp.gun.destroy();
+    rp.weapon.destroy();
     rp.hpBarBg.destroy();
-    rp.hpBar.destroy();
+    rp.hp.destroy();
     rp.nameText.destroy();
     this.remotePlayers.delete(id);
+  }
+
+  private getWeaponTexture(weapon: WeaponType): string {
+    switch (weapon) {
+      case 'sword': return TEX.WEAPON_SWORD;
+      case 'spear': return TEX.WEAPON_SPEAR;
+      case 'bow': return TEX.WEAPON_BOW;
+    }
   }
 
   update(_time: number, delta: number): void {
     // -- Day/Night --
     const nightAmount = this.dayNight.update(delta);
+    if (!this.alive) {
+    if (!this.alive) {
     this.fogOfWar.setNightAmount(nightAmount);
 
     if (!this.alive) {
@@ -338,13 +353,13 @@ export class MainScene extends Phaser.Scene {
     // -- Player rotation toward aim --
     this.player.setRotation(input.aimAngle);
 
-    // -- Gun position --
-    const gunDist = PLAYER_RADIUS + 6;
-    this.playerGun.setPosition(
-      this.player.x + Math.cos(input.aimAngle) * gunDist,
-      this.player.y + Math.sin(input.aimAngle) * gunDist
+    // -- Weapon position --
+    const weaponDist = PLAYER_RADIUS + 6;
+    this.playerWeapon.setPosition(
+      this.player.x + Math.cos(input.aimAngle) * weaponDist,
+      this.player.y + Math.sin(input.aimAngle) * weaponDist
     );
-    this.playerGun.setRotation(input.aimAngle);
+    this.playerWeapon.setRotation(input.aimAngle);
 
     // -- HP bar --
     this.playerHpBarBg.setPosition(this.player.x, this.player.y - PLAYER_RADIUS - 10);
@@ -360,10 +375,15 @@ export class MainScene extends Phaser.Scene {
       this.player.setAlpha(1);
     }
 
-    // -- Shooting --
-    if (input.shooting && this.time.now - this.lastShotTime > BULLET_COOLDOWN) {
-      this.lastShotTime = this.time.now;
-      this.fireBullet(input.aimAngle);
+    // -- Attacking --
+    const wCfg = WEAPON_CONFIGS[this.config.weapon];
+    if (input.shooting && this.time.now - this.lastAttackTime > wCfg.cooldown) {
+      this.lastAttackTime = this.time.now;
+      if (wCfg.type === 'ranged') {
+        this.fireArrow(input.aimAngle);
+      } else {
+        this.meleeAttack(input.aimAngle);
+      }
     }
 
     // -- Update local bullets --
@@ -383,7 +403,7 @@ export class MainScene extends Phaser.Scene {
     // -- Check monster collisions with local player --
     if (this.alive && this.time.now > this.invulnUntil) {
       for (const [mId, monster] of this.monsterManager.getMonsters()) {
-        if (monster.type === 'spitter') continue; // Spitters use projectiles
+        if (monster.type === 'spitter') continue;
         const dist = Math.hypot(monster.sprite.x - this.player.x, monster.sprite.y - this.player.y);
         if (dist < PLAYER_RADIUS + 12) {
           this.takeDamage(this.monsterManager.getMonsterDamage(mId), 'monster');
@@ -392,17 +412,19 @@ export class MainScene extends Phaser.Scene {
     }
 
     // -- Check bullet collisions with local player --
+    const bulletDamage = WEAPON_CONFIGS.bow.damage;
     for (const [bulletId, bullet] of this.remoteBullets) {
       if (!bullet.sprite.active) continue;
       const dist = Math.hypot(bullet.sprite.x - this.player.x, bullet.sprite.y - this.player.y);
       if (dist < PLAYER_RADIUS + BULLET_RADIUS && this.time.now > this.invulnUntil) {
-        this.takeDamage(BULLET_DAMAGE, bullet.ownerId);
+        this.takeDamage(bulletDamage, bullet.ownerId);
         bullet.sprite.destroy();
         this.remoteBullets.delete(bulletId);
       }
     }
 
     // -- Check local bullet collisions with monsters --
+    const weaponDamage = WEAPON_CONFIGS[this.config.weapon].damage;
     for (let i = this.localBullets.length - 1; i >= 0; i--) {
       const bullet = this.localBullets[i];
       if (bullet.src !== 'player') continue;
@@ -414,14 +436,14 @@ export class MainScene extends Phaser.Scene {
         const mRadius = monster.type === 'boss' ? 22 : monster.type === 'crawler' ? 12 : 10;
         if (dist < mRadius + BULLET_RADIUS) {
           if (this.config.isHost) {
-            this.monsterManager.damageMonster(mId, BULLET_DAMAGE);
+            this.monsterManager.damageMonster(mId, weaponDamage);
           }
           bullet.sprite.destroy();
           if (bullet.rtdbId) this.sync?.removeBullet(bullet.rtdbId);
           this.localBullets.splice(i, 1);
           break;
         }
-      }
+      }weapo
     }
 
     // -- Fog of war --
@@ -436,7 +458,7 @@ export class MainScene extends Phaser.Scene {
         rp.sprite.y
       );
       rp.sprite.setVisible(visible && rp.alive);
-      rp.gun.setVisible(visible && rp.alive);
+      rp.weapon.setVisible(visible && rp.alive);
       rp.hpBarBg.setVisible(visible && rp.alive);
       rp.hpBar.setVisible(visible && rp.alive);
       rp.nameText.setVisible(visible && rp.alive);
@@ -486,13 +508,14 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private fireBullet(angle: number): void {
+  private fireArrow(angle: number): void {
+    const speed = WEAPON_CONFIGS.bow.speed;
     const startX = this.player.x + Math.cos(angle) * (PLAYER_RADIUS + BULLET_RADIUS + 2);
     const startY = this.player.y + Math.sin(angle) * (PLAYER_RADIUS + BULLET_RADIUS + 2);
-    const vx = Math.cos(angle) * BULLET_SPEED;
-    const vy = Math.sin(angle) * BULLET_SPEED;
+    const vx = Math.cos(angle) * speed;
+    const vy = Math.sin(angle) * speed;
 
-    const sprite = this.add.image(startX, startY, TEX.BULLET_PLAYER).setDepth(18);
+    const sprite = this.add.image(startX, startY, TEX.ARROW).setDepth(18).setRotation(angle);
     this.physics.add.existing(sprite);
     const body = sprite.body as Phaser.Physics.Arcade.Body;
     body.setCircle(
@@ -504,16 +527,6 @@ export class MainScene extends Phaser.Scene {
     body.setCollideWorldBounds(true);
     body.onWorldBounds = true;
 
-    // Muzzle flash
-    const flash = this.add.image(startX, startY, TEX.MUZZLE_FLASH).setDepth(19).setAlpha(0.8);
-    this.tweens.add({
-      targets: flash,
-      alpha: 0,
-      scale: 1.5,
-      duration: 100,
-      onComplete: () => flash.destroy()
-    });
-
     const bullet: LocalBullet = {
       sprite,
       vx,
@@ -523,7 +536,6 @@ export class MainScene extends Phaser.Scene {
       lifetime: 1500
     };
 
-    // Collide with walls
     this.physics.add.collider(sprite, this.wallGroup, () => {
       sprite.destroy();
       if (bullet.rtdbId) this.sync?.removeBullet(bullet.rtdbId);
@@ -531,7 +543,6 @@ export class MainScene extends Phaser.Scene {
       if (idx !== -1) this.localBullets.splice(idx, 1);
     });
 
-    // Sync to RTDB
     if (this.sync) {
       bullet.rtdbId = this.sync.fireBullet({
         x: startX,
@@ -543,6 +554,40 @@ export class MainScene extends Phaser.Scene {
       });
     }
     this.localBullets.push(bullet);
+  }
+
+  private meleeAttack(angle: number): void {
+    const wCfg = WEAPON_CONFIGS[this.config.weapon];
+    const range = wCfg.range;
+    const damage = wCfg.damage;
+
+    // Visual effect
+    const effectTex = this.config.weapon === 'sword' ? TEX.SLASH_EFFECT : TEX.THRUST_EFFECT;
+    const effectX = this.player.x + Math.cos(angle) * (PLAYER_RADIUS + range * 0.5);
+    const effectY = this.player.y + Math.sin(angle) * (PLAYER_RADIUS + range * 0.5);
+    const effect = this.add.image(effectX, effectY, effectTex).setDepth(19).setRotation(angle).setAlpha(0.8);
+    this.tweens.add({
+      targets: effect,
+      alpha: 0,
+      scale: 1.3,
+      duration: 200,
+      onComplete: () => effect.destroy()
+    });
+
+    // Damage monsters in range
+    if (this.config.isHost) {
+      for (const [mId, monster] of this.monsterManager.getMonsters()) {
+        const dist = Math.hypot(monster.sprite.x - this.player.x, monster.sprite.y - this.player.y);
+        if (dist > PLAYER_RADIUS + range) continue;
+        const angleToMonster = Math.atan2(monster.sprite.y - this.player.y, monster.sprite.x - this.player.x);
+        let angleDiff = Math.abs(angleToMonster - angle);
+        if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+        const maxAngle = this.config.weapon === 'sword' ? Math.PI / 4 : Math.PI / 8;
+        if (angleDiff < maxAngle) {
+          this.monsterManager.damageMonster(mId, damage);
+        }
+      }
+    }
   }
 
   private spawnMonsterBullet(x: number, y: number, vx: number, vy: number): void {
@@ -577,7 +622,7 @@ export class MainScene extends Phaser.Scene {
 
   private updateBullets(delta: number): void {
     for (let i = this.localBullets.length - 1; i >= 0; i--) {
-      const bullet = this.localBullets[i];
+      const bullet = this.localBullets[i];ARROW
       bullet.lifetime -= delta;
 
       if (bullet.lifetime <= 0 || !bullet.sprite.active) {
@@ -593,7 +638,6 @@ export class MainScene extends Phaser.Scene {
           if (!rp.alive) continue;
           const dist = Math.hypot(bullet.sprite.x - rp.sprite.x, bullet.sprite.y - rp.sprite.y);
           if (dist < PLAYER_RADIUS + BULLET_RADIUS) {
-            // We hit them — but damage is applied on their client
             bullet.sprite.destroy();
             if (bullet.rtdbId) this.sync?.removeBullet(bullet.rtdbId);
             this.localBullets.splice(i, 1);
@@ -615,12 +659,12 @@ export class MainScene extends Phaser.Scene {
   }
 
   private addRemoteBullet(id: string, data: BulletData): void {
-    const texKey = data.src === 'monster' ? TEX.BULLET_MONSTER : TEX.BULLET_PLAYER;
+    const texKey = data.src === 'monster' ? TEX.BULLET_MONSTER : TEX.ARROW;
     const sprite = this.add.image(data.x, data.y, texKey).setDepth(18);
     this.physics.add.existing(sprite);
     const body = sprite.body as Phaser.Physics.Arcade.Body;
     body.setCircle(
-      BULLET_RADIUS,
+      BULLEweapoRADIUS,
       sprite.width / 2 - BULLET_RADIUS,
       sprite.height / 2 - BULLET_RADIUS
     );
@@ -636,11 +680,11 @@ export class MainScene extends Phaser.Scene {
       lifetime: 1500,
       rtdbId: id
     };
-
-    this.physics.add.collider(sprite, this.wallGroup, () => {
-      sprite.destroy();
-      this.remoteBullets.delete(id);
-    });
+weapon.setPosition(
+        rp.sprite.x + Math.cos(rp.targetAngle) * gunDist,
+        rp.sprite.y + Math.sin(rp.targetAngle) * gunDist
+      );
+      rp.weapo
 
     this.remoteBullets.set(id, bullet);
   }
@@ -657,7 +701,7 @@ export class MainScene extends Phaser.Scene {
     for (const [, rp] of this.remotePlayers) {
       if (!rp.alive) {
         rp.sprite.setVisible(false);
-        rp.gun.setVisible(false);
+        rp.weapon.setVisible(false);
         rp.hpBarBg.setVisible(false);
         rp.hpBar.setVisible(false);
         rp.nameText.setVisible(false);
@@ -671,15 +715,15 @@ export class MainScene extends Phaser.Scene {
       // Rotation
       rp.sprite.setRotation(rp.targetAngle);
 
-      // Gun
-      const gunDist = PLAYER_RADIUS + 6;
-      rp.gun.setPosition(
-        rp.sprite.x + Math.cos(rp.targetAngle) * gunDist,
-        rp.sprite.y + Math.sin(rp.targetAngle) * gunDist
-      );
-      rp.gun.setRotation(rp.targetAngle);
+      // Weapon
+      const weaponDist = PLAYER_RADIUS + 6;
+      rp.weapon.setPosition(
+        rp.sprite.x + Math.cos(rp.targetAngle) * weaponDist,
+        rp.sprite.y + Math.sin(rp.targetAngle) * weaponDist
+      );Weapo
+      rp.weapon.setRotation(rp.targetAngle);
 
-      // HP barplayerGun
+      // HP bar
       rp.hpBarBg.setPosition(rp.sprite.x, rp.sprite.y - PLAYER_RADIUS - 10);
       rp.hpBar.setPosition(rp.sprite.x, rp.sprite.y - PLAYER_RADIUS - 10);
       const ratio = Math.max(0, rp.hp / MAX_HP);
@@ -692,9 +736,10 @@ export class MainScene extends Phaser.Scene {
   }
 
   private takeDamage(amount: number, source: string): void {
-    if (!this.alive || this.time.now < this.invulnUntil) return;
-
-    this.hp -= amount;
+the undead');
+      }
+    } else {
+      this.config.onEliminated('the undead
     this.invulnUntil = this.time.now + 300;
 
     this.cameras.main.shake(100, 0.005);
@@ -713,7 +758,7 @@ export class MainScene extends Phaser.Scene {
 
     // Death animation
     this.tweens.add({
-      targets: [this.player, this.playerGun],
+      targets: [this.player, this.playerWeapon],
       alpha: 0,
       scaleX: 0.2,
       scaleY: 0.2,
@@ -729,10 +774,10 @@ export class MainScene extends Phaser.Scene {
       if (rp) {
         this.config.onEliminated(rp.name);
       } else {
-        this.config.onEliminated('a monster');
+        this.config.onEliminated('the undead');
       }
     } else {
-      this.config.onEliminated('a monster');
+      this.config.onEliminated('the undead');
     }
     this.sync?.syncLocalPlayer({
       x: this.player.x,

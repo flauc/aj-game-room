@@ -5,25 +5,30 @@ import Phaser from 'phaser';
  * Call generateAllTextures(scene) once during scene.create().
  */
 
+export type WeaponType = 'sword' | 'spear' | 'bow';
+
 const TEX = {
   PLAYER: 'player_',
-  PLAYER_GUN: 'gun_',
+  WEAPON_SWORD: 'weapon_sword',
+  WEAPON_SPEAR: 'weapon_spear',
+  WEAPON_BOW: 'weapon_bow',
   CRAWLER: 'crawler',
   SPITTER: 'spitter',
   BOSS: 'boss',
-  BULLET_PLAYER: 'bullet_player',
+  ARROW: 'arrow',
   BULLET_MONSTER: 'bullet_monster',
   WALL: 'wall',
   FLOOR: 'floor_',
   BUSH: 'bush',
   SPAWN_HOLE: 'spawn_hole',
-  MUZZLE_FLASH: 'muzzle_flash'
+  SLASH_EFFECT: 'slash_effect',
+  THRUST_EFFECT: 'thrust_effect'
 } as const;
 
 export { TEX };
 
 const PLAYER_COLORS = [
-  0x3b82f6, 0xef4444, 0x22c55e, 0xf59e0b, 0xa855f7, 0x06b6d4, 0xec4899, 0xf97316
+  0x8b6914, 0xc9302c, 0x2e7d32, 0xb8860b, 0x6a1b9a, 0x00695c, 0xad1457, 0xd84315
 ];
 
 export { PLAYER_COLORS };
@@ -46,16 +51,20 @@ export function generateAllTextures(scene: Phaser.Scene): void {
   // --- Players (one per color) ---
   for (let i = 0; i < PLAYER_COLORS.length; i++) {
     generatePlayerTexture(scene, i, PLAYER_COLORS[i]);
-    generateGunTexture(scene, i, PLAYER_COLORS[i]);
   }
 
-  // --- Monsters ---
+  // --- Weapons ---
+  generateSwordTexture(scene);
+  generateSpearTexture(scene);
+  generateBowTexture(scene);
+
+  // --- Monsters (zombies) ---
   generateCrawlerTexture(scene);
   generateSpitterTexture(scene);
   generateBossTexture(scene);
 
-  // --- Bullets ---
-  generatePlayerBulletTexture(scene);
+  // --- Projectiles ---
+  generateArrowTexture(scene);
   generateMonsterBulletTexture(scene);
 
   // --- Tiles ---
@@ -65,45 +74,125 @@ export function generateAllTextures(scene: Phaser.Scene): void {
 
   // --- Effects ---
   generateSpawnHoleTexture(scene);
-  generateMuzzleFlashTexture(scene);
+  generateSlashEffectTexture(scene);
+  generateThrustEffectTexture(scene);
 }
 
 function generatePlayerTexture(scene: Phaser.Scene, index: number, color: number): void {
   const g = scene.add.graphics();
   const size = 32;
+  const cx = size / 2;
+  const cy = size / 2;
 
-  // Body - circle with inner shading
-  g.fillStyle(darken(color, 40));
-  g.fillCircle(size / 2, size / 2, 14);
+  // Body — brown tunic circle
+  g.fillStyle(darken(color, 30));
+  g.fillCircle(cx, cy, 14);
   g.fillStyle(color);
-  g.fillCircle(size / 2, size / 2, 12);
-  g.fillStyle(lighten(color, 60), 0.4);
-  g.fillCircle(size / 2 - 3, size / 2 - 3, 6);
+  g.fillCircle(cx, cy, 12);
+
+  // Tunic highlight
+  g.fillStyle(lighten(color, 40), 0.3);
+  g.fillCircle(cx - 3, cy - 3, 5);
+
+  // Belt
+  g.lineStyle(2, darken(color, 60));
+  g.beginPath();
+  g.moveTo(cx - 10, cy + 3);
+  g.lineTo(cx + 10, cy + 3);
+  g.strokePath();
+
+  // Head (skin tone)
+  g.fillStyle(0xdeb887);
+  g.fillCircle(cx, cy - 5, 6);
+  g.fillStyle(0xf5deb3, 0.3);
+  g.fillCircle(cx - 1, cy - 6, 3);
+
+  // Hood/cap
+  g.fillStyle(darken(color, 50));
+  g.beginPath();
+  g.arc(cx, cy - 7, 7, Math.PI, 0, false);
+  g.fill();
 
   // Eyes
-  g.fillStyle(0xffffff);
-  g.fillCircle(size / 2 + 3, size / 2 - 3, 3);
-  g.fillCircle(size / 2 + 3, size / 2 + 3, 3);
-  g.fillStyle(0x111111);
-  g.fillCircle(size / 2 + 4, size / 2 - 3, 1.5);
-  g.fillCircle(size / 2 + 4, size / 2 + 3, 1.5);
+  g.fillStyle(0x333333);
+  g.fillCircle(cx + 3, cy - 6, 1.2);
+  g.fillCircle(cx + 3, cy - 3, 1.2);
 
   g.generateTexture(TEX.PLAYER + index, size, size);
   g.destroy();
 }
 
-function generateGunTexture(scene: Phaser.Scene, index: number, color: number): void {
+function generateSwordTexture(scene: Phaser.Scene): void {
   const g = scene.add.graphics();
-  // Gun barrel
-  g.fillStyle(0x555555);
-  g.fillRoundedRect(0, 2, 16, 6, 2);
-  g.fillStyle(0x888888);
-  g.fillRoundedRect(1, 3, 14, 4, 1);
-  // Muzzle tip
-  g.fillStyle(darken(color, 30));
-  g.fillRect(13, 1, 3, 8);
+  const w = 22;
+  const h = 10;
 
-  g.generateTexture(TEX.PLAYER_GUN + index, 16, 10);
+  // Blade
+  g.fillStyle(0xc0c0c0);
+  g.fillRect(6, 3, 14, 4);
+  g.fillStyle(0xe8e8e8);
+  g.fillRect(7, 4, 12, 2);
+
+  // Blade tip
+  g.fillStyle(0xd0d0d0);
+  g.fillTriangle(20, 3, 22, 5, 20, 7);
+
+  // Crossguard
+  g.fillStyle(0xb8860b);
+  g.fillRect(4, 1, 3, 8);
+
+  // Handle
+  g.fillStyle(0x5c3317);
+  g.fillRect(0, 3, 5, 4);
+
+  g.generateTexture(TEX.WEAPON_SWORD, w, h);
+  g.destroy();
+}
+
+function generateSpearTexture(scene: Phaser.Scene): void {
+  const g = scene.add.graphics();
+  const w = 28;
+  const h = 8;
+
+  // Shaft
+  g.fillStyle(0x8b6914);
+  g.fillRect(0, 3, 22, 2);
+
+  // Spearhead
+  g.fillStyle(0xaaaaaa);
+  g.fillTriangle(20, 1, 28, 4, 20, 7);
+  g.fillStyle(0xcccccc, 0.5);
+  g.fillTriangle(21, 2, 26, 4, 21, 6);
+
+  g.generateTexture(TEX.WEAPON_SPEAR, w, h);
+  g.destroy();
+}
+
+function generateBowTexture(scene: Phaser.Scene): void {
+  const g = scene.add.graphics();
+  const w = 16;
+  const h = 16;
+  const cx = w / 2;
+  const cy = h / 2;
+
+  // Bow arc
+  g.lineStyle(2.5, 0x8b4513);
+  g.beginPath();
+  g.arc(cx - 2, cy, 6, -Math.PI * 0.4, Math.PI * 0.4, false);
+  g.strokePath();
+
+  // Bowstring
+  g.lineStyle(1, 0xccccaa);
+  g.beginPath();
+  const topY = cy - Math.sin(Math.PI * 0.4) * 6;
+  const botY = cy + Math.sin(Math.PI * 0.4) * 6;
+  const bowX = cx - 2 + Math.cos(Math.PI * 0.4) * 6;
+  g.moveTo(bowX, topY);
+  g.lineTo(cx + 4, cy);
+  g.lineTo(bowX, botY);
+  g.strokePath();
+
+  g.generateTexture(TEX.WEAPON_BOW, w, h);
   g.destroy();
 }
 
@@ -113,37 +202,42 @@ function generateCrawlerTexture(scene: Phaser.Scene): void {
   const cx = size / 2;
   const cy = size / 2;
 
-  // Body - segmented bug look
-  g.fillStyle(0x2d7a2d);
+  // Zombie shambler body — rotting green-gray
+  g.fillStyle(0x3d5c3d);
   g.fillCircle(cx, cy, 12);
-  g.fillStyle(0x44aa44);
+  g.fillStyle(0x5a7a5a);
   g.fillCircle(cx, cy, 10);
 
-  // Segments
-  g.lineStyle(1.5, 0x2d7a2d);
+  // Tattered look — dark patches
+  g.fillStyle(0x2a3a2a, 0.6);
+  g.fillCircle(cx - 3, cy + 2, 4);
+  g.fillCircle(cx + 4, cy - 1, 3);
+
+  // Reaching arms
+  g.lineStyle(3, 0x4a6a4a);
   g.beginPath();
-  g.moveTo(cx - 8, cy - 3);
-  g.lineTo(cx + 8, cy - 3);
-  g.moveTo(cx - 8, cy + 3);
-  g.lineTo(cx + 8, cy + 3);
+  g.moveTo(cx + 8, cy - 3);
+  g.lineTo(cx + 14, cy - 5);
+  g.moveTo(cx + 8, cy + 3);
+  g.lineTo(cx + 14, cy + 5);
   g.strokePath();
 
-  // Eyes - angry red
-  g.fillStyle(0xff3333);
-  g.fillCircle(cx + 5, cy - 4, 2.5);
-  g.fillCircle(cx + 5, cy + 4, 2.5);
-  g.fillStyle(0x220000);
-  g.fillCircle(cx + 6, cy - 4, 1);
-  g.fillCircle(cx + 6, cy + 4, 1);
-
-  // Mandibles
-  g.lineStyle(2, 0x2d7a2d);
+  // Clawed fingers
+  g.lineStyle(1.5, 0x3d5c3d);
   g.beginPath();
-  g.moveTo(cx + 9, cy - 3);
-  g.lineTo(cx + 13, cy - 6);
-  g.moveTo(cx + 9, cy + 3);
-  g.lineTo(cx + 13, cy + 6);
+  g.moveTo(cx + 14, cy - 5);
+  g.lineTo(cx + 16, cy - 7);
+  g.moveTo(cx + 14, cy + 5);
+  g.lineTo(cx + 16, cy + 7);
   g.strokePath();
+
+  // Glowing red eyes
+  g.fillStyle(0xff2222);
+  g.fillCircle(cx + 5, cy - 3, 2);
+  g.fillCircle(cx + 5, cy + 3, 2);
+  g.fillStyle(0xff8888, 0.5);
+  g.fillCircle(cx + 5, cy - 3, 1);
+  g.fillCircle(cx + 5, cy + 3, 1);
 
   g.generateTexture(TEX.CRAWLER, size, size);
   g.destroy();
@@ -155,35 +249,38 @@ function generateSpitterTexture(scene: Phaser.Scene): void {
   const cx = size / 2;
   const cy = size / 2;
 
-  // Body - purple ooze
-  g.fillStyle(0x6622aa);
+  // Bloated zombie — sickly green
+  g.fillStyle(0x2d5a2d);
   g.fillCircle(cx, cy, 10);
-  g.fillStyle(0x9944cc);
+  g.fillStyle(0x447744);
   g.fillCircle(cx, cy, 8);
 
-  // Inner glow
-  g.fillStyle(0xbb66ff, 0.3);
-  g.fillCircle(cx - 2, cy - 2, 4);
+  // Toxic ooze glow
+  g.fillStyle(0x66ff33, 0.2);
+  g.fillCircle(cx, cy, 9);
+  g.fillStyle(0x88ff44, 0.15);
+  g.fillCircle(cx - 2, cy - 2, 5);
 
-  // Single large eye
+  // Pustules
+  g.fillStyle(0x99cc33, 0.6);
+  g.fillCircle(cx - 3, cy + 3, 2.5);
+  g.fillCircle(cx + 2, cy + 4, 2);
+  g.fillCircle(cx - 4, cy - 1, 1.8);
+
+  // Single glowing eye
   g.fillStyle(0xffff00);
-  g.fillCircle(cx + 3, cy, 3.5);
+  g.fillCircle(cx + 4, cy, 3);
   g.fillStyle(0x000000);
-  g.fillCircle(cx + 4, cy, 1.5);
+  g.fillCircle(cx + 5, cy, 1.3);
 
-  // Tentacles
-  g.lineStyle(1.5, 0x7733bb);
-  for (let a = 0; a < 6; a++) {
-    const angle = (a / 6) * Math.PI * 2 + Math.PI * 0.5;
-    const sx = cx + Math.cos(angle) * 8;
-    const sy = cy + Math.sin(angle) * 8;
-    const ex = cx + Math.cos(angle) * 11;
-    const ey = cy + Math.sin(angle) * 11;
-    g.beginPath();
-    g.moveTo(sx, sy);
-    g.lineTo(ex, ey);
-    g.strokePath();
-  }
+  // Dripping mouth
+  g.lineStyle(1.5, 0x66cc22);
+  g.beginPath();
+  g.moveTo(cx + 7, cy + 2);
+  g.lineTo(cx + 10, cy + 5);
+  g.moveTo(cx + 8, cy + 1);
+  g.lineTo(cx + 11, cy + 3);
+  g.strokePath();
 
   g.generateTexture(TEX.SPITTER, size, size);
   g.destroy();
@@ -195,83 +292,91 @@ function generateBossTexture(scene: Phaser.Scene): void {
   const cx = size / 2;
   const cy = size / 2;
 
-  // Body - large armored
-  g.fillStyle(0x881111);
+  // Necromancer — dark robed figure
+  g.fillStyle(0x1a0a2e);
   g.fillCircle(cx, cy, 22);
-  g.fillStyle(0xcc2222);
+  g.fillStyle(0x2d1b4e);
   g.fillCircle(cx, cy, 19);
 
-  // Armor plates
-  g.lineStyle(2, 0x881111);
-  g.strokeCircle(cx, cy, 15);
-  g.strokeCircle(cx, cy, 10);
-
-  // Cross pattern
-  g.lineStyle(2, 0x661111);
+  // Robe folds
+  g.lineStyle(1.5, 0x1a0a2e);
   g.beginPath();
-  g.moveTo(cx - 18, cy);
-  g.lineTo(cx + 18, cy);
   g.moveTo(cx, cy - 18);
   g.lineTo(cx, cy + 18);
+  g.moveTo(cx - 12, cy - 6);
+  g.lineTo(cx - 8, cy + 16);
+  g.moveTo(cx + 12, cy - 6);
+  g.lineTo(cx + 8, cy + 16);
   g.strokePath();
 
-  // Glowing core
-  g.fillStyle(0xff6600, 0.6);
-  g.fillCircle(cx, cy, 6);
-  g.fillStyle(0xffcc00, 0.4);
-  g.fillCircle(cx, cy, 3);
+  // Purple magic aura
+  g.fillStyle(0x9933ff, 0.15);
+  g.fillCircle(cx, cy, 23);
+  g.lineStyle(1.5, 0x7722cc, 0.3);
+  g.strokeCircle(cx, cy, 20);
 
-  // Eyes
-  g.fillStyle(0xff0000);
-  g.fillCircle(cx + 8, cy - 8, 3);
-  g.fillCircle(cx + 8, cy + 8, 3);
-  g.fillStyle(0xffff00, 0.5);
-  g.fillCircle(cx + 8, cy - 8, 1.5);
-  g.fillCircle(cx + 8, cy + 8, 1.5);
+  // Skull face
+  g.fillStyle(0xccccaa);
+  g.fillCircle(cx + 2, cy - 4, 7);
+  g.fillStyle(0x1a0a2e);
+  // Eye sockets
+  g.fillCircle(cx + 4, cy - 6, 2.5);
+  g.fillCircle(cx + 4, cy - 1, 2.5);
+  // Nose
+  g.fillTriangle(cx + 7, cy - 5, cx + 7, cy - 2, cx + 9, cy - 3.5);
 
-  // Spikes
-  g.fillStyle(0x661111);
-  for (let a = 0; a < 8; a++) {
-    const angle = (a / 8) * Math.PI * 2;
-    const bx = cx + Math.cos(angle) * 19;
-    const by = cy + Math.sin(angle) * 19;
-    const tx = cx + Math.cos(angle) * 23;
-    const ty = cy + Math.sin(angle) * 23;
-    const lx = cx + Math.cos(angle - 0.3) * 18;
-    const ly = cy + Math.sin(angle - 0.3) * 18;
-    const rx = cx + Math.cos(angle + 0.3) * 18;
-    const ry = cy + Math.sin(angle + 0.3) * 18;
-    g.fillTriangle(lx, ly, tx, ty, rx, ry);
-  }
+  // Glowing eyes inside sockets
+  g.fillStyle(0xcc44ff);
+  g.fillCircle(cx + 4, cy - 6, 1.2);
+  g.fillCircle(cx + 4, cy - 1, 1.2);
+
+  // Staff/bones floating
+  g.lineStyle(2, 0x887766);
+  g.beginPath();
+  g.moveTo(cx - 14, cy - 10);
+  g.lineTo(cx - 10, cy + 14);
+  g.strokePath();
+  g.fillStyle(0xccbbaa);
+  g.fillCircle(cx - 14, cy - 10, 3);
+
+  // Purple magic orb on staff
+  g.fillStyle(0xbb44ff, 0.6);
+  g.fillCircle(cx - 14, cy - 10, 2);
 
   g.generateTexture(TEX.BOSS, size, size);
   g.destroy();
 }
 
-function generatePlayerBulletTexture(scene: Phaser.Scene): void {
+function generateArrowTexture(scene: Phaser.Scene): void {
   const g = scene.add.graphics();
-  const size = 12;
-  // Bright core
-  g.fillStyle(0xfff7aa, 0.3);
-  g.fillCircle(size / 2, size / 2, 5);
-  g.fillStyle(0xfcd34d);
-  g.fillCircle(size / 2, size / 2, 3.5);
-  g.fillStyle(0xffffff, 0.6);
-  g.fillCircle(size / 2, size / 2, 1.5);
+  const w = 14;
+  const h = 6;
 
-  g.generateTexture(TEX.BULLET_PLAYER, size, size);
+  // Shaft
+  g.fillStyle(0x8b6914);
+  g.fillRect(0, 2, 10, 2);
+
+  // Arrowhead
+  g.fillStyle(0xaaaaaa);
+  g.fillTriangle(9, 0, 14, 3, 9, 6);
+
+  // Fletching
+  g.fillStyle(0xcc3333, 0.7);
+  g.fillTriangle(0, 1, 3, 3, 0, 5);
+
+  g.generateTexture(TEX.ARROW, w, h);
   g.destroy();
 }
 
 function generateMonsterBulletTexture(scene: Phaser.Scene): void {
   const g = scene.add.graphics();
   const size = 14;
-  // Angry red glow
-  g.fillStyle(0xff3333, 0.2);
+  // Green toxic glob
+  g.fillStyle(0x44ff22, 0.2);
   g.fillCircle(size / 2, size / 2, 6);
-  g.fillStyle(0xff4444);
+  g.fillStyle(0x33cc11);
   g.fillCircle(size / 2, size / 2, 4);
-  g.fillStyle(0xff9999, 0.5);
+  g.fillStyle(0x88ff66, 0.5);
   g.fillCircle(size / 2, size / 2, 2);
 
   g.generateTexture(TEX.BULLET_MONSTER, size, size);
@@ -282,13 +387,12 @@ function generateWallTexture(scene: Phaser.Scene): void {
   const g = scene.add.graphics();
   const s = 50;
 
-  // Base stone
-  g.fillStyle(0x334155);
+  // Medieval stone wall — warm gray
+  g.fillStyle(0x5a524a);
   g.fillRect(0, 0, s, s);
 
-  // Brick pattern
-  g.lineStyle(1, 0x475569, 0.6);
-  // Horizontal lines
+  // Stone block pattern
+  g.lineStyle(1, 0x6b635b, 0.6);
   g.beginPath();
   g.moveTo(0, s / 3);
   g.lineTo(s, s / 3);
@@ -296,7 +400,6 @@ function generateWallTexture(scene: Phaser.Scene): void {
   g.lineTo(s, (2 * s) / 3);
   g.strokePath();
 
-  // Vertical lines (offset per row)
   g.beginPath();
   g.moveTo(s / 2, 0);
   g.lineTo(s / 2, s / 3);
@@ -308,8 +411,13 @@ function generateWallTexture(scene: Phaser.Scene): void {
   g.lineTo(s / 2, s);
   g.strokePath();
 
-  // Subtle highlight on top/left edges
-  g.lineStyle(1, 0x556677, 0.3);
+  // Moss/lichen spots
+  g.fillStyle(0x4a5a3a, 0.3);
+  g.fillCircle(8, 40, 3);
+  g.fillCircle(38, 12, 2);
+
+  // Highlight on top/left
+  g.lineStyle(1, 0x7a726a, 0.3);
   g.beginPath();
   g.moveTo(0, 0);
   g.lineTo(s, 0);
@@ -318,7 +426,7 @@ function generateWallTexture(scene: Phaser.Scene): void {
   g.strokePath();
 
   // Dark edge bottom/right
-  g.lineStyle(1, 0x1e293b, 0.5);
+  g.lineStyle(1, 0x3a332e, 0.5);
   g.beginPath();
   g.moveTo(s - 1, 0);
   g.lineTo(s - 1, s);
@@ -331,22 +439,21 @@ function generateWallTexture(scene: Phaser.Scene): void {
 }
 
 function generateFloorTextures(scene: Phaser.Scene): void {
-  // Generate 4 floor variants for visual variety
   for (let v = 0; v < 4; v++) {
     const g = scene.add.graphics();
     const s = 50;
 
-    // Base color with slight variation
-    const baseColors = [0x1a1a2e, 0x191928, 0x1b1b30, 0x18182a];
+    // Dirt/cobblestone ground
+    const baseColors = [0x3a2e1e, 0x382c1c, 0x3c301f, 0x362a1a];
     g.fillStyle(baseColors[v]);
     g.fillRect(0, 0, s, s);
 
-    // Subtle grid lines
-    g.lineStyle(1, 0x252540, 0.2);
+    // Subtle grid (cobblestone cracks)
+    g.lineStyle(1, 0x2a2015, 0.3);
     g.strokeRect(0, 0, s, s);
 
-    // Tiny specks for texture
-    g.fillStyle(0x252540, 0.4);
+    // Small pebbles/dirt specks
+    g.fillStyle(0x4a3e2e, 0.4);
     const seeds = [
       [8, 12],
       [30, 8],
@@ -360,6 +467,12 @@ function generateFloorTextures(scene: Phaser.Scene): void {
       g.fillRect(px, py, 2, 2);
     }
 
+    // Occasional grass tufts
+    if (v % 2 === 0) {
+      g.fillStyle(0x3a4a2a, 0.3);
+      g.fillRect(10 + v * 5, 20, 3, 2);
+    }
+
     g.generateTexture(TEX.FLOOR + v, s, s);
     g.destroy();
   }
@@ -369,11 +482,11 @@ function generateBushTexture(scene: Phaser.Scene): void {
   const g = scene.add.graphics();
   const s = 50;
 
-  // Dark ground under bush
-  g.fillStyle(0x0d2818, 0.8);
+  // Dark earth under hedge
+  g.fillStyle(0x1a1208, 0.8);
   g.fillRect(0, 0, s, s);
 
-  // Leaf clusters
+  // Thorny hedge clusters
   const clusters = [
     { x: 12, y: 12, r: 10 },
     { x: 30, y: 10, r: 9 },
@@ -384,14 +497,22 @@ function generateBushTexture(scene: Phaser.Scene): void {
   ];
 
   for (const c of clusters) {
-    g.fillStyle(0x166534, 0.7);
+    g.fillStyle(0x2a4a1a, 0.7);
     g.fillCircle(c.x, c.y, c.r);
-    g.fillStyle(0x22c55e, 0.3);
+    g.fillStyle(0x3a6a2a, 0.3);
     g.fillCircle(c.x - 1, c.y - 1, c.r * 0.6);
   }
 
-  // Border
-  g.lineStyle(1, 0x22c55e, 0.25);
+  // Thorns
+  g.lineStyle(1, 0x5a3a1a, 0.4);
+  g.beginPath();
+  g.moveTo(15, 8);
+  g.lineTo(18, 4);
+  g.moveTo(35, 25);
+  g.lineTo(38, 21);
+  g.strokePath();
+
+  g.lineStyle(1, 0x3a6a2a, 0.25);
   g.strokeRect(0, 0, s, s);
 
   g.generateTexture(TEX.BUSH, s, s);
@@ -404,37 +525,65 @@ function generateSpawnHoleTexture(scene: Phaser.Scene): void {
   const cx = size / 2;
   const cy = size / 2;
 
+  // Cracked earth — zombie crawling out
   g.fillStyle(0x000000, 0.8);
   g.fillCircle(cx, cy, 14);
-  g.fillStyle(0x331100, 0.6);
+  g.fillStyle(0x2a1a0a, 0.6);
   g.fillCircle(cx, cy, 11);
-  g.fillStyle(0x442200, 0.4);
+  g.fillStyle(0x3a2a1a, 0.4);
   g.fillCircle(cx, cy, 7);
 
   // Cracks radiating outward
-  g.lineStyle(1, 0x553300, 0.5);
-  for (let a = 0; a < 6; a++) {
-    const angle = (a / 6) * Math.PI * 2;
+  g.lineStyle(1.5, 0x4a3a1a, 0.6);
+  for (let a = 0; a < 8; a++) {
+    const angle = (a / 8) * Math.PI * 2;
     g.beginPath();
-    g.moveTo(cx + Math.cos(angle) * 5, cy + Math.sin(angle) * 5);
+    g.moveTo(cx + Math.cos(angle) * 4, cy + Math.sin(angle) * 4);
     g.lineTo(cx + Math.cos(angle) * 14, cy + Math.sin(angle) * 14);
     g.strokePath();
   }
+
+  // Zombie hand silhouette
+  g.fillStyle(0x3d5c3d, 0.5);
+  g.fillRect(cx - 2, cy - 8, 4, 6);
+  g.fillRect(cx - 3, cy - 10, 2, 3);
+  g.fillRect(cx + 1, cy - 9, 2, 3);
 
   g.generateTexture(TEX.SPAWN_HOLE, size, size);
   g.destroy();
 }
 
-function generateMuzzleFlashTexture(scene: Phaser.Scene): void {
+function generateSlashEffectTexture(scene: Phaser.Scene): void {
   const g = scene.add.graphics();
-  const size = 16;
-  g.fillStyle(0xffffff, 0.4);
-  g.fillCircle(size / 2, size / 2, 7);
-  g.fillStyle(0xffee88, 0.6);
-  g.fillCircle(size / 2, size / 2, 4);
-  g.fillStyle(0xffffff, 0.8);
-  g.fillCircle(size / 2, size / 2, 2);
+  const size = 40;
+  const cx = size / 2;
+  const cy = size / 2;
 
-  g.generateTexture(TEX.MUZZLE_FLASH, size, size);
+  // Sword slash arc
+  g.lineStyle(3, 0xffffff, 0.7);
+  g.beginPath();
+  g.arc(cx, cy, 16, -Math.PI * 0.4, Math.PI * 0.4, false);
+  g.strokePath();
+  g.lineStyle(2, 0xcccccc, 0.4);
+  g.beginPath();
+  g.arc(cx, cy, 14, -Math.PI * 0.3, Math.PI * 0.3, false);
+  g.strokePath();
+
+  g.generateTexture(TEX.SLASH_EFFECT, size, size);
+  g.destroy();
+}
+
+function generateThrustEffectTexture(scene: Phaser.Scene): void {
+  const g = scene.add.graphics();
+  const w = 30;
+  const h = 8;
+
+  // Spear thrust line effect
+  g.fillStyle(0xffffff, 0.5);
+  g.fillRect(0, 3, 28, 2);
+  g.fillStyle(0xcccccc, 0.3);
+  g.fillTriangle(26, 0, 30, 4, 26, 8);
+
+  g.generateTexture(TEX.THRUST_EFFECT, w, h);
   g.destroy();
 }

@@ -23,7 +23,7 @@
       <p class="mb-8 text-lg text-gray-300">{winnerName} won the match</p>
     {:else}
       <h1 class="mb-2 text-5xl font-extrabold text-gray-400">GAME OVER</h1>
-      <p class="mb-8 text-lg text-gray-300">The monsters won this time...</p>
+      <p class="mb-8 text-lg text-gray-300">The zombies won this time...</p>
     {/if}
 
     <div class="mb-8 rounded-xl border border-gray-800 bg-gray-900 p-6">

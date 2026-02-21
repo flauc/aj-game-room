@@ -2,6 +2,7 @@
   import Lobby from './Lobby.svelte';
   import Game from './Game.svelte';
   import Results from './Results.svelte';
+  import type { WeaponType } from './game/SpriteGen';
 
   type Phase =
     | { type: 'lobby' }
@@ -13,6 +14,7 @@
         players: Record<string, { name: string }>;
         isHost: boolean;
         singlePlayer: boolean;
+        weapon: WeaponType;
       }
     | {
         type: 'results';
@@ -34,6 +36,7 @@
     players: Record<string, { name: string }>;
     isHost: boolean;
     singlePlayer?: boolean;
+    weapon: WeaponType;
   }) {
     phase = {
       type: 'game',
@@ -71,6 +74,7 @@
     players={phase.players}
     isHost={phase.isHost}
     singlePlayer={phase.singlePlayer}
+    weapon={phase.weapon}
     onGameOver={handleGameOver}
   />
 {:else if phase.type === 'results'}

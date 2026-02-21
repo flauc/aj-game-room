@@ -8,6 +8,7 @@
     type RoomPlayer
   } from '$lib/rooms';
   import { authUser } from '$lib/auth.svelte';
+  import type { WeaponType } from './game/SpriteGen';
 
   interface Props {
     onStart: (data: {
@@ -17,6 +18,7 @@
       isHost: boolean;
       playerName: string;
       singlePlayer?: boolean;
+      weapon: WeaponType;
     }) => void;
   }
 
@@ -32,6 +34,7 @@
   let room = $state<Room | null>(null);
   let error = $state('');
   let phase = $state<'choice' | 'lobby'>('choice');
+  let selectedWeapon = $state<WeaponType>('sword');
 
   let unsubRoom: (() => void) | null = null;
 
@@ -43,7 +46,8 @@
       players: { [soloId]: { name: playerName } },
       isHost: true,
       playerName,
-      singlePlayer: true
+      singlePlayer: true,
+      weapon: selectedWeapon
     });
   }
 
@@ -96,7 +100,7 @@
     for (const [id, p] of Object.entries(room.players)) {
       players[id] = { name: p.name };
     }
-    onStart({ roomId, playerId, players, isHost, playerName });
+    onStart({ roomId, playerId, players, isHost, playerName, weapon: selectedWeapon });
   }
 
   async function handleStartGame() {
@@ -109,13 +113,44 @@
 
 <div class="flex min-h-[calc(100vh-65px)] items-center justify-center px-4">
   <div class="w-full max-w-md">
-    <h1 class="mb-8 text-center text-3xl font-bold text-white">Blaster Arena</h1>
+    <h1 class="mb-8 text-center text-3xl font-bold text-white">Zombie Siege</h1>
 
     {#if phase === 'choice'}
       <div class="space-y-4">
         <p class="text-center text-gray-400">
           Playing as <span class="font-semibold text-white">{playerName}</span>
         </p>
+
+        <!-- Weapon Selection -->
+        <div class="rounded-xl border border-gray-800 bg-gray-900 p-4">
+          <p class="mb-3 text-center text-sm font-medium tracking-wider text-gray-400 uppercase">Choose your weapon</p>
+          <div class="grid grid-cols-3 gap-2">
+            <button
+              onclick={() => selectedWeapon = 'sword'}
+              class="flex flex-col items-center gap-1 rounded-lg px-3 py-3 text-sm font-semibold transition {selectedWeapon === 'sword' ? 'bg-amber-700 text-white ring-2 ring-amber-400' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
+            >
+              <span class="text-2xl">&#x2694;&#xFE0F;</span>
+              <span>Sword</span>
+              <span class="text-xs font-normal text-gray-400">Close range</span>
+            </button>
+            <button
+              onclick={() => selectedWeapon = 'spear'}
+              class="flex flex-col items-center gap-1 rounded-lg px-3 py-3 text-sm font-semibold transition {selectedWeapon === 'spear' ? 'bg-amber-700 text-white ring-2 ring-amber-400' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
+            >
+              <span class="text-2xl">&#x1F531;</span>
+              <span>Spear</span>
+              <span class="text-xs font-normal text-gray-400">Mid range</span>
+            </button>
+            <button
+              onclick={() => selectedWeapon = 'bow'}
+              class="flex flex-col items-center gap-1 rounded-lg px-3 py-3 text-sm font-semibold transition {selectedWeapon === 'bow' ? 'bg-amber-700 text-white ring-2 ring-amber-400' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
+            >
+              <span class="text-2xl">&#x1F3F9;</span>
+              <span>Bow</span>
+              <span class="text-xs font-normal text-gray-400">Long range</span>
+            </button>
+          </div>
+        </div>
         <button
           onclick={handleSolo}
           class="w-full rounded-lg bg-amber-600 px-4 py-4 text-lg font-semibold text-white transition hover:bg-amber-500"

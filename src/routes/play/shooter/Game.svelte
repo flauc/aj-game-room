@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import type { WeaponType } from './game/SpriteGen';
 
   interface Props {
     roomId: string;
@@ -8,10 +9,11 @@
     players: Record<string, { name: string }>;
     isHost: boolean;
     singlePlayer: boolean;
+    weapon: WeaponType;
     onGameOver: (winnerId: string | null, winnerName: string | null) => void;
   }
 
-  let { roomId, playerId, playerName, players, isHost, singlePlayer, onGameOver }: Props = $props();
+  let { roomId, playerId, playerName, players, isHost, singlePlayer, weapon, onGameOver }: Props = $props();
 
   let container: HTMLDivElement;
   let game: Phaser.Game | null = null;
@@ -37,7 +39,7 @@
       parent: container,
       width: window.innerWidth,
       height: window.innerHeight - 65,
-      backgroundColor: '#0a0a1a',
+      backgroundColor: '#1a130a',
       physics: {
         default: 'arcade',
         arcade: {
@@ -63,6 +65,7 @@
       players,
       isHost,
       singlePlayer,
+      weapon,
       onEliminated: (killer: string) => {
         eliminated = true;
         killerName = killer;
