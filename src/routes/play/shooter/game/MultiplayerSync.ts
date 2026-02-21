@@ -20,6 +20,7 @@ export interface PlayerState {
   al: boolean; // alive
   kills: number;
   name: string;
+  w?: string; // weapon type
 }
 
 export interface MonsterState {
