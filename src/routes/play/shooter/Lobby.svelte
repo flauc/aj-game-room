@@ -7,6 +7,7 @@
     type Room,
     type RoomPlayer
   } from '$lib/rooms';
+  import { authUser } from '$lib/auth.svelte';
 
   interface Props {
     onStart: (data: {
@@ -20,14 +21,16 @@
 
   let { onStart }: Props = $props();
 
-  let playerName = $state('');
+  const playerName = $derived(
+    authUser.current?.displayName || authUser.current?.email?.split('@')[0] || 'Player'
+  );
   let roomCode = $state('');
   let roomId = $state('');
   let playerId = $state('');
   let isHost = $state(false);
   let room = $state<Room | null>(null);
   let error = $state('');
-  let phase = $state<'name' | 'choice' | 'lobby'>('name');
+  let phase = $state<'choice' | 'lobby'>('choice');
 
   let unsubRoom: (() => void) | null = null;
 
@@ -87,15 +90,6 @@
     await startGameFn(roomId);
   }
 
-  function handleNameSubmit() {
-    if (!playerName.trim()) {
-      error = 'Enter your name';
-      return;
-    }
-    error = '';
-    phase = 'choice';
-  }
-
   let playerList = $derived(room ? Object.entries(room.players) : []);
   let canStart = $derived(isHost && playerList.length >= 2);
 </script>
@@ -104,29 +98,7 @@
   <div class="w-full max-w-md">
     <h1 class="mb-8 text-center text-3xl font-bold text-white">Blaster Arena</h1>
 
-    {#if phase === 'name'}
-      <div class="rounded-xl border border-gray-800 bg-gray-900 p-6">
-        <label for="name" class="mb-2 block text-sm font-medium text-gray-400">Your Name</label>
-        <input
-          id="name"
-          type="text"
-          maxlength="16"
-          bind:value={playerName}
-          onkeydown={(e) => e.key === 'Enter' && handleNameSubmit()}
-          class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none"
-          placeholder="Enter your name..."
-        />
-        {#if error}
-          <p class="mt-2 text-sm text-red-400">{error}</p>
-        {/if}
-        <button
-          onclick={handleNameSubmit}
-          class="mt-4 w-full rounded-lg bg-indigo-600 px-4 py-3 font-semibold text-white transition hover:bg-indigo-500"
-        >
-          Continue
-        </button>
-      </div>
-    {:else if phase === 'choice'}
+    {#if phase === 'choice'}
       <div class="space-y-4">
         <p class="text-center text-gray-400">
           Playing as <span class="font-semibold text-white">{playerName}</span>

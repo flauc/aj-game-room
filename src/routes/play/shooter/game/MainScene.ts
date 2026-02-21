@@ -722,9 +722,8 @@ export class MainScene extends Phaser.Scene {
     } else {
       this.config.onEliminated('a monster');
     }
-dayNight?.destroy();
-    this.
-    this.sync.syncLocalPlayer({
+    dayNight?.destroy();
+    this.this.sync.syncLocalPlayer({
       x: this.player.x,
       y: this.player.y,
       a: 0,
