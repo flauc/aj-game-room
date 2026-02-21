@@ -2,25 +2,19 @@ import Phaser from 'phaser';
 import { MAP_DATA, MAP_COLS, MAP_ROWS, TILE_SIZE } from './TileMap';
 
 /**
- * Fog of war system with day/night cycle awareness.
- *
- * Day:   large vision radius, standard fog outside vision.
- * Night: small vision radius, explored areas stay dimly visible,
- *        unexplored areas are pitch black.
+ * Fog of war — everything outside the player's vision is pitch black.
+ * Uses a screen-sized CanvasTexture with native Canvas 2D compositing
+ * to reliably cut a vision circle out of solid black.
  */
 export class FogOfWar {
-  private fog: Phaser.GameObjects.RenderTexture;
-  private blackRect: Phaser.GameObjects.Rectangle;
-  private clearBrush: Phaser.GameObjects.Graphics;
-  private dimBrush: Phaser.GameObjects.Graphics;
   private scene: Phaser.Scene;
+  private canvasTex!: Phaser.Textures.CanvasTexture;
+  private fogImage!: Phaser.GameObjects.Image;
+  private ctx!: CanvasRenderingContext2D;
 
   private dayVisionRadius: number;
   private nightVisionRadius: number;
   private currentVisionRadius: number;
-
-  /** Grid tracking explored tiles (for night mode) */
-  private explored: boolean[][];
 
   /** 0 = full day, 1 = full night */
   private nightAmount = 0;
@@ -31,70 +25,35 @@ export class FogOfWar {
     this.nightVisionRadius = nightVisionRadius;
     this.currentVisionRadius = dayVisionRadius;
 
-    const worldW = MAP_COLS * TILE_SIZE;
-    const worldH = MAP_ROWS * TILE_SIZE;
+    const cam = scene.cameras.main;
+    this.createCanvas(cam.width, cam.height);
 
-    // Explored grid
-    this.explored = Array.from({ length: MAP_ROWS }, () => Array(MAP_COLS).fill(false));
-
-    // Create a RenderTexture covering the whole map
-    this.fog = scene.add.renderTexture(0, 0, worldW, worldH);
-    this.fog.setDepth(1000);
-
-    // Black fill rectangle (used to stamp onto the RT)
-    this.blackRect = scene.add.rectangle(0, 0, worldW, worldH, 0x000000, 0.85);
-    this.blackRect.setOrigin(0, 0);
-    this.blackRect.setVisible(false);
-
-    // Clear brush — soft radial gradient (erases fog fully)
-    this.clearBrush = scene.add.graphics();
-    this.clearBrush.setVisible(false);
-
-    // Dim brush — for explored areas at night (partial erase)
-    this.dimBrush = scene.add.graphics();
-    this.dimBrush.setVisible(false);
-
-    this.rebuildBrushes();
+    // Handle resize
+    scene.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
+      this.fogImage.destroy();
+      this.scene.textures.remove('_fogCanvas');
+      this.createCanvas(gameSize.width, gameSize.height);
+    });
   }
 
-  private rebuildBrushes(): void {
-    const r = this.currentVisionRadius;
-
-    // Clear brush: erases fog entirely around player
-    this.clearBrush.clear();
-    const steps = 24;
-    for (let i = steps; i >= 0; i--) {
-      const ratio = i / steps;
-      const radius = r * ratio;
-      const alpha = i === 0 ? 1 : 0.045;
-      this.clearBrush.fillStyle(0x000000, alpha);
-      this.clearBrush.fillCircle(r, r, radius);
-    }
-
-    // Dim brush: a single tile-sized square used to partially erase explored tiles at night
-    this.dimBrush.clear();
-    this.dimBrush.fillStyle(0x000000, 0.4);
-    this.dimBrush.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  private createCanvas(w: number, h: number): void {
+    this.canvasTex = this.scene.textures.createCanvas('_fogCanvas', w, h)!;
+    this.ctx = this.canvasTex.getContext();
+    this.fogImage = this.scene.add
+      .image(0, 0, '_fogCanvas')
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(1000);
   }
 
   /** Set the night amount (0 = full day, 1 = full night). */
   setNightAmount(amount: number): void {
     this.nightAmount = Math.max(0, Math.min(1, amount));
-    const newRadius = Phaser.Math.Linear(
+    this.currentVisionRadius = Phaser.Math.Linear(
       this.dayVisionRadius,
       this.nightVisionRadius,
       this.nightAmount
     );
-
-    // Only rebuild brushes if radius changed significantly
-    if (Math.abs(newRadius - this.currentVisionRadius) > 2) {
-      this.currentVisionRadius = newRadius;
-      this.rebuildBrushes();
-    }
-
-    // Darkness increases at night
-    const alpha = Phaser.Math.Linear(0.75, 0.93, this.nightAmount);
-    this.blackRect.setFillStyle(0x000000, alpha);
   }
 
   getNightAmount(): number {
@@ -107,44 +66,36 @@ export class FogOfWar {
 
   /** Call this every frame with the local player's position. */
   update(playerX: number, playerY: number): void {
-    // Mark tiles around player as explored
-    const tileRadius = Math.ceil(this.currentVisionRadius / TILE_SIZE) + 1;
-    const playerCol = Math.floor(playerX / TILE_SIZE);
-    const playerRow = Math.floor(playerY / TILE_SIZE);
+    const cam = this.scene.cameras.main;
+    const w = this.canvasTex.width;
+    const h = this.canvasTex.height;
+    const ctx = this.ctx;
 
-    for (let dr = -tileRadius; dr <= tileRadius; dr++) {
-      for (let dc = -tileRadius; dc <= tileRadius; dc++) {
-        const r = playerRow + dr;
-        const c = playerCol + dc;
-        if (r < 0 || r >= MAP_ROWS || c < 0 || c >= MAP_COLS) continue;
-        if (MAP_DATA[r][c] === 1) continue; // Don't mark walls as explored
+    // Player position relative to camera viewport
+    const px = playerX - cam.scrollX;
+    const py = playerY - cam.scrollY;
+    const r = this.currentVisionRadius;
 
-        const tileX = c * TILE_SIZE + TILE_SIZE / 2;
-        const tileY = r * TILE_SIZE + TILE_SIZE / 2;
-        if (this.isVisible(playerX, playerY, tileX, tileY)) {
-          this.explored[r][c] = true;
-        }
-      }
-    }
+    // Fill entire canvas with solid black
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, w, h);
 
-    // Re-fill the fog with darkness
-    this.fog.clear();
-    this.fog.draw(this.blackRect, 0, 0);
+    // Cut out the vision circle using destination-out
+    ctx.globalCompositeOperation = 'destination-out';
+    const gradient = ctx.createRadialGradient(px, py, r * 0.25, px, py, r);
+    gradient.addColorStop(0, 'rgba(0,0,0,1)');
+    gradient.addColorStop(0.6, 'rgba(0,0,0,0.95)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fill();
 
-    // At night, partially reveal explored areas (dim)
-    if (this.nightAmount > 0.3) {
-      for (let r = 0; r < MAP_ROWS; r++) {
-        for (let c = 0; c < MAP_COLS; c++) {
-          if (this.explored[r][c]) {
-            this.fog.erase(this.dimBrush, c * TILE_SIZE, r * TILE_SIZE);
-          }
-        }
-      }
-    }
+    // Reset composite mode
+    ctx.globalCompositeOperation = 'source-over';
 
-    // Erase fog around the player (full vision)
-    const vr = this.currentVisionRadius;
-    this.fog.erase(this.clearBrush, playerX - vr, playerY - vr);
+    this.canvasTex.refresh();
   }
 
   /**
@@ -171,9 +122,9 @@ export class FogOfWar {
   }
 
   destroy(): void {
-    this.fog.destroy();
-    this.blackRect.destroy();
-    this.clearBrush.destroy();
-    this.dimBrush.destroy();
+    this.fogImage.destroy();
+    if (this.scene.textures.exists('_fogCanvas')) {
+      this.scene.textures.remove('_fogCanvas');
+    }
   }
 }

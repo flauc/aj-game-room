@@ -1,6 +1,6 @@
 import adapter from '@sveltejs/adapter-static';
 
 /** @type {import('@sveltejs/kit').Config} */
-const config = { kit: { adapter: adapter({ pages: 'public', fallback: '200.html' }) } };
+const config = { kit: { adapter: adapter({ pages: 'public', fallback: 'index.html' }) } };
 
 export default config;

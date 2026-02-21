@@ -81,6 +81,7 @@ export class MainScene extends Phaser.Scene {
   private lastShotTime = 0;
   private invulnUntil = 0;
   private playerColorIndex = 0;
+  private lastStatsTime = 0;
 
   // Remote players
   private remotePlayers = new Map<string, RemotePlayer>();
@@ -190,28 +191,30 @@ export class MainScene extends Phaser.Scene {
   }
 
   private renderMap(): void {
+    // Bake all floor tiles into a single RenderTexture (eliminates ~1200 individual images)
+    const floorRT = this.add.renderTexture(0, 0, WORLD_W, WORLD_H).setOrigin(0, 0).setDepth(0);
+
     for (let r = 0; r < MAP_ROWS; r++) {
       for (let c = 0; c < MAP_COLS; c++) {
         const tile = MAP_DATA[r][c];
-        const x = c * TILE_SIZE + TILE_SIZE / 2;
-        const y = r * TILE_SIZE + TILE_SIZE / 2;
+        const x = c * TILE_SIZE;
+        const y = r * TILE_SIZE;
 
         if (tile === 1) {
-          // Wall
-          const wall = this.add.image(x, y, TEX.WALL).setDepth(2);
+          // Wall — keep as individual Image for physics collisions
+          const wall = this.add.image(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TEX.WALL).setDepth(2);
           this.physics.add.existing(wall, true);
           (wall.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE_SIZE, TILE_SIZE);
           this.wallGroup.add(wall);
-        } else if (tile === 2) {
-          // Floor under bush
-          const variant = (r * 7 + c * 13) % 4;
-          this.add.image(x, y, TEX.FLOOR + variant).setDepth(0);
-          // Bush on top
-          this.add.image(x, y, TEX.BUSH).setDepth(15);
         } else {
-          // Floor with variant
+          // Draw floor directly into baked texture
           const variant = (r * 7 + c * 13) % 4;
-          this.add.image(x, y, TEX.FLOOR + variant).setDepth(0);
+          floorRT.drawFrame(TEX.FLOOR + variant, undefined, x, y);
+
+          if (tile === 2) {
+            // Bush on top — keep as individual Image for depth sorting
+            this.add.image(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TEX.BUSH).setDepth(15);
+          }
         }
       }
     }
@@ -467,16 +470,20 @@ export class MainScene extends Phaser.Scene {
       this.checkWinCondition();
     }
 
-    // -- Stats update --
-    const aliveCount =
-      (this.alive ? 1 : 0) +
-      Array.from(this.remotePlayers.values()).filter((rp) => rp.alive).length;
-    this.config.onStatsUpdate(
-      this.kills,
-      this.monsterManager.getWave(),
-      aliveCount,
-      this.dayNight.getTimeLabel()
-    );
+    // -- Stats update (throttled to ~10Hz) --
+    if (this.time.now - this.lastStatsTime > 100) {
+      this.lastStatsTime = this.time.now;
+      let aliveCount = this.alive ? 1 : 0;
+      for (const rp of this.remotePlayers.values()) {
+        if (rp.alive) aliveCount++;
+      }
+      this.config.onStatsUpdate(
+        this.kills,
+        this.monsterManager.getWave(),
+        aliveCount,
+        this.dayNight.getTimeLabel()
+      );
+    }
   }
 
   private fireBullet(angle: number): void {
