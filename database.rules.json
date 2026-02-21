@@ -1,0 +1,26 @@
+{
+  "rules": {
+    "games": {
+      "$roomId": {
+        ".read": true,
+        "state": { ".write": true },
+        "wave": { ".write": true },
+        "winner": { ".write": true },
+        "players": {
+          "$playerId": {
+            ".write": true
+          }
+        },
+        "monsters": {
+          ".write": true
+        },
+        "bullets": {
+          ".write": true
+        },
+        "events": {
+          ".write": true
+        }
+      }
+    }
+  }
+}
